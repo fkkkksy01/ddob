@@ -1,0 +1,6 @@
+% 设计分布式观测器
+obs = cell(N, 1);
+for i = 1:N
+    obs{i} = DistributedObserver(A, B0, C, topology, 2, 0.1); % 参数 gamma 和 eta
+    obs{i}.LSTM = trainLSTM('干扰数据.mat'); % 加载预训练LSTM
+end
