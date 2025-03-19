@@ -1,0 +1,77 @@
+% 性能分析与可视化
+% 确保已定义并填充 missles_periodic 变量
+if ~exist('missiles_periodic', 'var')
+    error('变量 "missiles_periodic" 未定义。请确保在运行此脚本之前已定义并填充该变量。');
+end
+
+% 设置中文字体
+set(0, 'DefaultAxesFontName', 'Microsoft YaHei');
+set(0, 'DefaultTextFontName', 'Microsoft YaHei');
+
+% 轨迹对比
+figure('Position', [200, 200, 800, 600])
+subplot(2, 1, 1)
+hold on; grid on; axis equal;
+colors = lines(N);
+legendEntries = cell(1, 2 * N);
+for i = 1:N
+    plot(missiles(i).x(1, :), missiles(i).x(3, :), 'Color', colors(i, :), 'LineWidth', 1.5)
+    plot(missiles(i).x_ref(1, :), missiles(i).x_ref(3, :), '--', 'Color', colors(i, :))
+    legendEntries{2 * i - 1} = sprintf('拦截弹%d轨迹', i);
+    legendEntries{2 * i} = sprintf('参考轨迹%d', i);
+end
+title('事件触发控制轨迹对比')
+xlabel('X轴位置(m)'); ylabel('Y轴位置(m)')
+legend(legendEntries, 'Location', 'bestoutside')
+
+subplot(2, 1, 2)
+hold on; grid on; axis equal;
+for i = 1:N
+    plot(missiles_periodic(i).x(1, :), missiles_periodic(i).x(3, :), 'Color', colors(i, :), 'LineWidth', 1.5)
+end
+title('周期触发控制轨迹')
+xlabel('X轴位置(m)'); ylabel('Y轴位置(m)')
+legend({'拦截弹1', '拦截弹2', '拦截弹3', '拦截弹4'}, 'Location', 'bestoutside')
+
+% 触发次数对比
+figure('Position', [300, 300, 600, 400])
+trigger_counts = [sum([missiles.trigger_count]), sum([missiles_periodic.trigger_count])];
+bar(trigger_counts)
+set(gca, 'XTickLabel', {'事件触发', '周期触发'})
+ylabel('总触发次数')
+title('控制策略通信次数对比')
+grid on
+
+% 误差对比分析
+figure('Position', [400, 200, 800, 400])
+subplot(1, 2, 1)
+hold on; grid on;
+errorLabels = cell(1, N);
+for i = 1:N
+    plot(vecnorm(missiles(i).x(1:2:3, :) - missiles(i).x_ref(1:2:3, :)), 'Color', colors(i, :))
+    errorLabels{i} = sprintf('拦截弹%d', i);
+end
+title('事件触发位置误差')
+xlabel('时间步'); ylabel('误差范数(m)')
+legend(errorLabels, 'Location', 'best')
+
+subplot(1, 2, 2)
+hold on; grid on;
+for i = 1:N
+    plot(vecnorm(missiles_periodic(i).x(1:2:3, :) - missiles_periodic(i).x_ref(1:2:3, :)), 'Color', colors(i, :))
+end
+title('周期触发位置误差')
+xlabel('时间步'); ylabel('误差范数(m)')
+legend(errorLabels, 'Location', 'best')
+
+% 动态阈值演化
+figure('Position', [500, 200, 600, 400])
+hold on; grid on;
+thresholdLabels = cell(1, N);
+for i = 1:N
+    plot(missiles(i).sigma, 'Color', colors(i, :))
+    thresholdLabels{i} = sprintf('拦截弹%d', i);
+end
+title('动态阈值参数演化过程')
+xlabel('时间步'); ylabel('阈值参数σ')
+legend(thresholdLabels, 'Location', 'best')
