@@ -1,0 +1,50 @@
+function [u_opt, cost] = fast_mpc(x0, x_ref, A, B, Np, Q, R, u_min, u_max)
+    nx = size(A, 1);
+    nu = size(B, 2);
+    total_vars = Np * (nx + nu);
+    
+    % 构建Hessian矩阵
+    H = blkdiag(kron(eye(Np), Q), kron(eye(Np), R));
+    
+    % 构建等式约束矩阵
+    Aeq = zeros(Np * nx, total_vars);
+    beq = zeros(Np * nx, 1);
+    
+    % 构建状态方程约束
+    for i = 1:Np
+        row_start = (i - 1) * nx + 1;
+        row_end = i * nx;
+        
+        x_cols = (i - 1) * nx + 1 : i * nx;
+        u_cols = Np * nx + (i - 1) * nu + 1 : Np * nx + i * nu;
+        
+        if i == 1
+            Aeq(row_start:row_end, x_cols) = eye(nx);
+            Aeq(row_start:row_end, u_cols) = -B;
+            beq(row_start:row_end) = A * x0 - x_ref(:, 1);
+        else
+            prev_x_cols = (i - 2) * nx + 1 : (i - 1) * nx;
+            Aeq(row_start:row_end, x_cols) = eye(nx);
+            Aeq(row_start:row_end, prev_x_cols) = -A;
+            Aeq(row_start:row_end, u_cols) = -B;
+            beq(row_start:row_end) = -x_ref(:, min(i, size(x_ref, 2)));
+        end
+    end
+    
+    % 设置约束边界
+    lb = -inf(total_vars, 1);
+    ub = inf(total_vars, 1);
+    control_idx = Np * nx + 1 : total_vars;
+    lb(control_idx) = u_min;
+    ub(control_idx) = u_max;
+    
+    % 求解二次规划
+    options = optimoptions('quadprog', 'Display', 'off', 'OptimalityTolerance', 1e-6);
+    sol = quadprog(H, [], [], [], Aeq, beq, lb, ub, [], options);
+    
+    % 提取控制序列
+    u_start = Np * nx + 1;
+    u_end = Np * nx + Np * nu;
+    u_opt = reshape(sol(u_start:u_end), nu, []);
+    cost = sol' * H * sol;
+end
