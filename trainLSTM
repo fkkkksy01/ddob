@@ -1,0 +1,45 @@
+function lstm_model = trainLSTM(dataFile)
+    % 加载数据
+    data = load(dataFile);
+    
+    % 确保数据的格式和维度正确
+    X = data.X;
+    Y = data.Y;
+    
+    % 检查输入数据维度
+    num_samples = size(X, 1);
+    input_dim = size(X, 2);
+    
+    if input_dim ~= 8
+        error('输入数据的特征维度应为 8，但实际为 %d。请检查数据格式。', input_dim);
+    end
+    
+    % 转换数据格式为序列数据
+    X_seq = cell(num_samples, 1);
+    Y_seq = cell(num_samples, 1);
+    for i = 1:num_samples
+        X_seq{i} = X(i, :)';
+        Y_seq{i} = Y(i, :)';
+    end
+    
+    % 定义 LSTM 网络结构
+    layers = [
+        sequenceInputLayer(8)
+        batchNormalizationLayer
+        lstmLayer(32, 'InputWeightsInitializer', 'he')
+        dropoutLayer(0.2)
+        fullyConnectedLayer(4, 'WeightsInitializer', 'he')
+        regressionLayer];
+    
+    % 定义训练选项
+    options = trainingOptions('adam', ...
+        'MaxEpochs', 5, ...
+        'MiniBatchSize', 8, ...
+        'GradientThreshold', 1, ...
+        'Shuffle', 'every-epoch', ...
+        'InitialLearnRate', 0.0005, ...
+        'Verbose', 0);
+    
+    % 训练 LSTM 模型
+    lstm_model = trainNetwork(X_seq, Y_seq, layers, options);
+end
