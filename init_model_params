@@ -1,0 +1,36 @@
+% 初始化模型参数
+clear; clc; close all;
+
+% 线性化模型
+A = [1 0.1 0 0; 0 1 0 0; 0 0 1 0.1; 0 0 0 1]; 
+B0 = [0 0; 0.1 0; 0 0; 0 0.1];
+C = eye(4); % 观测矩阵
+F01 = 0.1 * eye(4); % 非线性项系数
+
+% 通信拓扑矩阵
+N = 4; % 拦截弹数量
+topology = [0 1 1 0; 1 0 1 1; 1 1 0 1; 0 1 1 0]; % 通信拓扑矩阵
+
+% 干扰场景
+d0 = @(t) 0.5 * sin(2 * t) + 0.3 * (t > 10); 
+d1 = @(t) 0.2 * randn(size(t));
+
+% LSTM 模型初始化
+layers = [
+    sequenceInputLayer(8)
+    batchNormalizationLayer
+    lstmLayer(32, 'InputWeightsInitializer', 'he')
+    dropoutLayer(0.2)
+    fullyConnectedLayer(4, 'WeightsInitializer', 'he')
+    regressionLayer];
+
+options = trainingOptions('adam', ...
+    'MaxEpochs', 5, ...
+    'MiniBatchSize', 8, ...
+    'GradientThreshold', 1, ...
+    'Shuffle', 'every-epoch', ...
+    'InitialLearnRate', 0.0005, ...
+    'Verbose', 0);
+
+% 加载预训练LSTM
+lstm_model = [];
