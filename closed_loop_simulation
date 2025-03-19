@@ -1,0 +1,76 @@
+% 闭环仿真
+Ts = 0.1; % 采样时间
+TotalSteps = 100; % 总仿真步数
+nx = 4; nu = 2; % 状态和控制输入维度
+
+% 初始化拦截弹结构体
+missiles = struct();
+for i = 1:N
+    missiles(i).x = zeros(nx, TotalSteps);      % 实际状态历史
+    missiles(i).x_hat = zeros(nx, TotalSteps);  % 观测状态历史
+    missiles(i).d_hat = zeros(nx, TotalSteps);  % 干扰估计历史
+    missiles(i).u = zeros(nu, TotalSteps);      % 控制输入历史
+    missiles(i).x_ref = zeros(nx, TotalSteps);  % 参考轨迹历史
+    missiles(i).sigma = zeros(1, TotalSteps);   % 动态阈值历史
+    missiles(i).sigma(1) = 0.5; % 初始动态阈值
+    missiles(i).trigger_count = 0;             % 触发计数器
+    missiles(i).x_hat_prev = zeros(nx, 1);      % 前一刻观测状态
+end
+
+% 通信拓扑（环形结构）
+adjacency = circshift(eye(N), 1) + circshift(eye(N), -1);
+
+for k = 1:TotalSteps-1
+    % 生成参考轨迹（协同包围场景）
+    for i = 1:N
+        theta = 2 * pi * i / N + 0.1 * k * Ts;
+        missiles(i).x_ref(:, k) = [10 * k * Ts + 5 * cos(theta);
+                                   2 + sin(theta);
+                                   10 * k * Ts + 5 * sin(theta);
+                                   2 + cos(theta)];
+    end
+    
+    for i = 1:N
+        % 真实系统状态更新（含非线性项和随机干扰）
+        d_real = 0.2 * randn(nx, 1); % 真实干扰
+        missiles(i).x(:, k+1) = A * missiles(i).x(:, k) + ...
+                              B0 * missiles(i).u(:, k) + ...
+                              F01 * tanh(missiles(i).x(:, k)) + d_real;
+        
+        % 分布式干扰观测器更新（含通信延迟处理）
+        missiles(i).x_hat_prev = missiles(i).x_hat(:, k);
+        neighbors = find(adjacency(i, :));
+        consensus_term = zeros(nx, 1);
+        for j = neighbors
+            delayed_state = missiles(j).x_hat_prev; 
+            consensus_term = consensus_term + (delayed_state - missiles(i).x_hat_prev);
+        end
+        Li = 0.1 * eye(nx); % 观测器增益
+        missiles(i).x_hat(:, k+1) = missiles(i).x_hat_prev + Ts * (...
+            A * missiles(i).x_hat_prev + ...
+            B0 * missiles(i).u(:, k) + ...
+            Li * (missiles(i).x(:, k) - C * missiles(i).x_hat_prev) + ...
+            0.5 * consensus_term);
+        
+        % 事件触发条件判断
+        e_i = missiles(i).x(:, k) - missiles(i).x_hat(:, k);
+        threshold = missiles(i).sigma(k) * norm(missiles(i).x(:, k) - missiles(i).x_ref(:, k))^2 + 0.05;
+        
+        if norm(e_i)^2 > threshold || k == 1
+            % 触发事件，执行MPC计算
+            [u_opt, ~] = fast_mpc(missiles(i).x_hat(:, k),...
+                                 missiles(i).x_ref(:, k:min(k+5, TotalSteps)),...
+                                 A, B0, 5, diag([10, 1, 10, 1]), 0.1 * eye(nu), -3, 3);
+            missiles(i).u(:, k+1) = u_opt(:, 1);
+            missiles(i).trigger_count = missiles(i).trigger_count + 1;
+            
+            % 更新动态阈值参数
+            missiles(i).sigma(k+1) = missiles(i).sigma(k) + ...
+                                    0.1 * (0.05 * norm(e_i)^2 - 0.1 * missiles(i).sigma(k));
+        else
+            % 保持上一时刻控制输入
+            missiles(i).u(:, k+1) = missiles(i).u(:, k);
+            missiles(i).sigma(k+1) = missiles(i).sigma(k);
+        end
+    end
+end
