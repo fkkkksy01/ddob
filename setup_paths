@@ -1,0 +1,12 @@
+% 确保所有相关函数和数据文件在 MATLAB 的路径中
+
+% 获取当前工作目录
+currentFolder = pwd;
+
+% 将当前目录及其所有子目录添加到 MATLAB 路径中
+addpath(genpath(currentFolder));
+
+% 保存路径
+savepath;
+
+disp('所有相关函数和数据文件已添加到 MATLAB 路径中。');
