@@ -1,0 +1,15 @@
+% 创建干扰数据文件
+
+% 示例数据生成
+num_samples = 1000; % 数据样本数量
+input_dim = 8; % 输入维度
+output_dim = 4; % 输出维度
+
+% 随机生成输入和输出数据
+X = randn(num_samples, input_dim);
+Y = randn(num_samples, output_dim);
+
+% 保存数据到干扰数据文件
+save('干扰数据.mat', 'X', 'Y');
+
+disp('干扰数据文件已创建并保存为 干扰数据.mat');
