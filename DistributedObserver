@@ -1,0 +1,32 @@
+classdef DistributedObserver
+    properties
+        A
+        B
+        C
+        topology
+        gamma
+        eta
+        LSTM
+    end
+    
+    methods
+        function obj = DistributedObserver(A, B, C, topology, gamma, eta)
+            obj.A = A;
+            obj.B = B;
+            obj.C = C;
+            obj.topology = topology;
+            obj.gamma = gamma;
+            obj.eta = eta;
+            obj.LSTM = [];
+        end
+        
+        function trainLSTM(obj, dataFile)
+            % 加载并训练LSTM模型
+            obj.LSTM = trainLSTM(dataFile);
+        end
+        
+        function estimateDisturbance(obj)
+            % 实现干扰估计逻辑
+        end
+    end
+end
