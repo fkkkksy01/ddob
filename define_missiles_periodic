@@ -1,0 +1,50 @@
+% 定义并填充 missiles_periodic 变量
+
+% 确保必要的变量已初始化
+if ~exist('missiles', 'var')
+    error('变量 "missiles" 未定义。请确保在运行此脚本之前已定义并填充该变量。');
+end
+
+% 设置必要的参数
+trigger_period = 5; % 触发周期
+Np = 5; % 预测步长
+Q = diag([10,1,10,1]); % 状态权重矩阵
+R = 0.1*eye(2); % 控制权重矩阵
+u_min = -3; u_max = 3; % 控制输入约束
+
+% 定义并填充 missiles_periodic 变量
+missiles_periodic = missiles;
+
+for k = 1:TotalSteps-1
+    for i = 1:N
+        % 状态更新（与主实验相同）
+        missiles_periodic(i).x(:,k+1) = A*missiles_periodic(i).x(:,k) + ...
+                                      B0*missiles_periodic(i).u(:,k) + ...
+                                      F01*tanh(missiles_periodic(i).x(:,k)) + 0.2*randn(nx,1);
+        
+        % 观测器更新（与主实验相同）
+        missiles_periodic(i).x_hat_prev = missiles_periodic(i).x_hat(:,k);
+        neighbors = find(adjacency(i,:));
+        consensus_term = zeros(nx,1);
+        for j = neighbors
+            delayed_state = missiles_periodic(j).x_hat_prev;
+            consensus_term = consensus_term + (delayed_state - missiles_periodic(i).x_hat_prev);
+        end
+        missiles_periodic(i).x_hat(:,k+1) = missiles_periodic(i).x_hat_prev + Ts*(...
+            A*missiles_periodic(i).x_hat_prev + ...
+            B0*missiles_periodic(i).u(:,k) + ...
+            0.1*(missiles_periodic(i).x(:,k) - C*missiles_periodic(i).x_hat_prev) + ...
+            0.5*consensus_term);
+        
+        % 周期性触发逻辑
+        if mod(k, trigger_period) == 0 || k == 1
+            [u_opt, ~] = fast_mpc(missiles_periodic(i).x_hat(:,k),...
+                                 missiles_periodic(i).x_ref(:,k:min(k+Np,TotalSteps)),...
+                                 A, B0, Np, Q, R, u_min, u_max);
+            missiles_periodic(i).u(:,k+1) = u_opt(:,1);
+            missiles_periodic(i).trigger_count = missiles_periodic(i).trigger_count + 1;
+        else
+            missiles_periodic(i).u(:,k+1) = missiles_periodic(i).u(:,k);
+        end
+    end
+end
